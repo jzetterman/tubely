@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -37,7 +38,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	file, header, err := r.FormFile("thumbnail")
 	if err != nil {
-		fmt.Errorf("Error retrieving thumbnail: %s", err)
+		respondWithError(w, http.StatusBadRequest, "Error parsing thumbnail", err)
 		return
 	}
 	defer file.Close()
@@ -52,6 +53,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusInternalServerError, "Unable to read the image", err)
 		return
 	}
+	encodedRawImage := base64.StdEncoding.EncodeToString(rawImage)
 
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
@@ -63,17 +65,18 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	videoThumbnails[videoID] = thumbnail{
-		data:      rawImage,
-		mediaType: mediaType,
-	}
+	// videoThumbnails[videoID] = thumbnail{
+	// 	data:      rawImage,
+	// 	mediaType: mediaType,
+	// }
 
-	thumbnailURL := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", cfg.port, videoID)
+	// thumbnailURL := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", cfg.port, videoID)
+	thumbnailURL := fmt.Sprintf("data:%s;base64,%s", mediaType, encodedRawImage)
 	video.ThumbnailURL = &thumbnailURL
 
 	err = cfg.db.UpdateVideo(video)
 	if err != nil {
-		delete(videoThumbnails, videoID)
+		// delete(videoThumbnails, videoID)
 		respondWithError(w, http.StatusInternalServerError, "Couldn't update video", err)
 		return
 	}
