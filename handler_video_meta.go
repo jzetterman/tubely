@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
@@ -36,6 +37,7 @@ func (cfg *apiConfig) handlerVideoMetaCreate(w http.ResponseWriter, r *http.Requ
 
 	video, err := cfg.db.CreateVideo(params.CreateVideoParams)
 	if err != nil {
+		fmt.Printf("CreateVideo error: %v\n", err)
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create video", err)
 		return
 	}
@@ -85,7 +87,7 @@ func (cfg *apiConfig) handlerVideoGet(w http.ResponseWriter, r *http.Request) {
 	videoIDString := r.PathValue("videoID")
 	videoID, err := uuid.Parse(videoIDString)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid video ID", err)
+		respondWithError(w, http.StatusInternalServerError, "Invalid video ID", err)
 		return
 	}
 
@@ -95,7 +97,17 @@ func (cfg *apiConfig) handlerVideoGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, video)
+	if video.ID == uuid.Nil {
+		respondWithError(w, http.StatusNotFound, "No video was returned", nil)
+
+	}
+	signedVideo, err := cfg.dbVideoToSignedVideo(video)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Error creating video URL", err)
+		return
+	}
+	respondWithJSON(w, http.StatusOK, signedVideo)
+
 }
 
 func (cfg *apiConfig) handlerVideosRetrieve(w http.ResponseWriter, r *http.Request) {
@@ -116,5 +128,13 @@ func (cfg *apiConfig) handlerVideosRetrieve(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	for i, video := range videos {
+		video, err := cfg.dbVideoToSignedVideo(video)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Couldn't generate presigned URL", err)
+			return
+		}
+		videos[i] = video
+	}
 	respondWithJSON(w, http.StatusOK, videos)
 }
